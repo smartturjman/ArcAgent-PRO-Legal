@@ -61,9 +61,11 @@ jobs:
           echo "Running integration tests (capturing output to integration_test.log)"
           python -u test_integration.py 2>&1 | tee integration_test.log || (echo 'Tests failed; showing tail of log:' && tail -n 200 integration_test.log && exit 1)
 
-      - name: Run E2E audit test
+      - name: Run E2E audit test (capture logs)
         run: |
-          python -u src/test_e2e_audit.py
+          set -x
+          echo "Running E2E audit test (capturing to e2e_audit.log)"
+          python -u src/test_e2e_audit.py 2>&1 | tee e2e_audit.log || (echo 'E2E test failed; tailing log:' && tail -n 200 e2e_audit.log && exit 1)
 
       - name: Run seeded/unseeded test paths
         run: |
@@ -90,6 +92,13 @@ jobs:
         with:
           name: integration-test-log
           path: integration_test.log
+
+      - name: Upload e2e audit log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-audit-log
+          path: e2e_audit.log
 
       - name: Stop Qdrant container
         if: always()
