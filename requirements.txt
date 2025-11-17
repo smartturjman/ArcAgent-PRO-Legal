@@ -1,0 +1,11 @@
+# Generated from current venv
+llama-index==0.14.8
+qdrant-client==1.15.1
+unstructured==0.18.20
+
+# Common dependencies (recommended)
+openai
+numpy
+pandas
+qdrant-client
+unstructured
