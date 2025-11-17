@@ -334,13 +334,130 @@ def initialize_agent(api_key: Optional[str] = None) -> Dict[str, Any]:
     print("[AGENT INIT]   1. query_compliance_database (RAG Retrieval)")
     print("[AGENT INIT]   2. record_audit_log (Compliance Auditing)")
     print("[AGENT INIT]   3. simulate_dlt_payment (Financial Settlement)")
+
+    # --- Wrapper Tool: compliance_query_wrapper ---
+    def compliance_query_wrapper(query: str):
+        """
+        Wrapper around `query_compliance_database` that exposes the final
+        answer and the underlying vector IDs for auditability.
+        """
+        rag_resp = query_compliance_database(query_text=query, top_k=5)
+        # Build a simple human-readable answer from retrieved context
+        answer_text = rag_resp.get("context", "").strip() or "No context found."
+        vector_ids = rag_resp.get("source_ids", [])
+        return {"answer": answer_text, "vector_ids": vector_ids}
+
+    # Convert wrapper and existing functions to FunctionTool objects
+    try:
+        compliance_tool = FunctionTool.from_defaults(
+            fn=compliance_query_wrapper,
+            name="query_compliance_database",
+            description="Tool to query the compliance database and return answer plus source vector IDs."
+        )
+
+        audit_logger_tool = FunctionTool.from_defaults(
+            fn=record_audit_log,
+            name="record_audit_log",
+            description="Writes compliance decision and vector IDs to the immutable audit log (JSONL)."
+        )
+
+        financial_tool = FunctionTool.from_defaults(
+            fn=simulate_dlt_payment,
+            name="simulate_dlt_payment",
+            description="Simulates a DLT payment and returns a transaction hash."
+        )
+    except Exception:
+        # If FunctionTool or from_defaults is not available, fall back to function refs
+        compliance_tool = compliance_query_wrapper
+        audit_logger_tool = record_audit_log
+        financial_tool = simulate_dlt_payment
+
     print("[AGENT INIT] ✓ Agent ready for orchestration\n")
-    
+
+    # Strong system prompt to enforce auditable workflow when using an
+    # LLM-based FunctionCalling agent. This instructs the model to always
+    # call the compliance database tool first, then record the audit, and
+    # only then consider payment authorization.
+    system_prompt = (
+        "You are the ArcAgent PRO-Legal compliance officer. BEFORE producing any\n"
+        "final answer or authorizing any payment, you MUST:\n"
+        "  1) Use the 'query_compliance_database' tool to retrieve official source\n"
+        "     documents and vector IDs.\n"
+        "  2) After receiving evidence, use the 'record_audit_log' tool to record\n"
+        "     the vector IDs, decision rationale, and any context.\n"
+        "  3) Only after the audit log is recorded may you authorize or simulate\n"
+        "     any payment using the 'simulate_dlt_payment' tool.\n"
+        "Always include the audit_id and list of source vector IDs in your final output."
+    )
+
     return {
         "api_key": api_key,
-        "tools": ["query_compliance_database", "record_audit_log", "simulate_dlt_payment"],
+        "tools": {
+            "compliance_tool": compliance_tool,
+            "audit_logger_tool": audit_logger_tool,
+            "financial_tool": financial_tool,
+        },
+        "system_prompt": system_prompt,
         "mode": "sequential"  # Tools execute sequentially for audit trail
     }
+
+
+def prepare_function_calling_agent_config(api_key: Optional[str] = None) -> Dict[str, Any]:
+    """Prepare a config object for creating a FunctionCalling / tools-based agent.
+
+    This helper returns a dict containing the `system_prompt` and the tool
+    objects (wrapped as FunctionTool where available). It attempts to
+    construct a live agent if `OpenAIAgent`/`FunctionCallingAgent` is
+    available in the environment, but will otherwise return the config
+    for a future agent construction.
+
+    Returns:
+        Dict with keys: api_key, system_prompt, tools (dict)
+    """
+    cfg = initialize_agent(api_key=api_key)
+
+    # Try to instantiate a FunctionCalling agent if llama-index provides it.
+    try:
+        # Import-resilient attempt - names vary across versions
+        try:
+            from llama_index.agent import OpenAIAgent  # type: ignore
+        except Exception:
+            from llama_index.agents.openai import OpenAIAgent  # type: ignore
+
+        # If OpenAIAgent exists, attempt construction using the provided tools.
+        # Note: this code is guarded and will not break if the class API
+        # differs or dependencies are missing.
+        tools = []
+        for name, tool_obj in cfg["tools"].items():
+            # If it's a FunctionTool instance, append directly; otherwise
+            # OpenAIAgent/other wrappers may accept plain callables.
+            tools.append(tool_obj)
+
+        agent_instance = None
+        try:
+            agent_instance = OpenAIAgent.from_tools(
+                tools=tools,
+                verbose=False,
+                system_prompt=cfg.get("system_prompt")
+            )
+        except Exception:
+            agent_instance = None
+
+        return {
+            "api_key": api_key,
+            "system_prompt": cfg.get("system_prompt"),
+            "tools": cfg.get("tools"),
+            "agent_instance": agent_instance,
+        }
+
+    except Exception:
+        # If we cannot build an LLM agent, just return the configuration
+        return {
+            "api_key": api_key,
+            "system_prompt": cfg.get("system_prompt"),
+            "tools": cfg.get("tools"),
+            "agent_instance": None,
+        }
 
 
 # ============================================================================
