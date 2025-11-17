@@ -67,9 +67,11 @@ jobs:
           echo "Running E2E audit test (capturing to e2e_audit.log)"
           python -u src/test_e2e_audit.py 2>&1 | tee e2e_audit.log || (echo 'E2E test failed; tailing log:' && tail -n 200 e2e_audit.log && exit 1)
 
-      - name: Run seeded/unseeded test paths
+      - name: Run seeded/unseeded test paths (capture logs)
         run: |
-          python -u src/test_seeded_paths.py
+          set -x
+          echo "Running seeded/unseeded test paths (capturing to seeded_paths.log)"
+          python -u src/test_seeded_paths.py 2>&1 | tee seeded_paths.log || (echo 'Seeded paths test failed; tailing log:' && tail -n 200 seeded_paths.log && exit 1)
 
       - name: Dump Qdrant logs (on failure)
         if: ${{ failure() }}
@@ -99,6 +101,13 @@ jobs:
         with:
           name: e2e-audit-log
           path: e2e_audit.log
+
+      - name: Upload seeded paths log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: seeded-paths-log
+          path: seeded_paths.log
 
       - name: Stop Qdrant container
         if: always()
