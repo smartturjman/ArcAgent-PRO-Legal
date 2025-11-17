@@ -1,4 +1,8 @@
-# Python
+venv/
+__pycache__/
+*.pyc
+*.log
+.audit_logs/# Python
 __pycache__/
 *.py[cod]
 *$py.class
