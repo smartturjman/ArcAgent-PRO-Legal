@@ -1,0 +1,37 @@
+Legal Agreement - English Version
+
+TERMS AND CONDITIONS
+
+1. PARTIES TO THE AGREEMENT
+This Legal Agreement ("Agreement") is entered into as of the date of execution between:
+Party A: The Company ("Company"), and
+Party B: The Client ("Client").
+
+2. SCOPE OF SERVICES
+The Company agrees to provide the following services:
+- Consultation and advisory services
+- Document preparation and review
+- Legal representation as required
+- Ongoing support and maintenance
+
+3. PAYMENT TERMS
+The Client agrees to pay the Company according to the following terms:
+- Initial deposit of 30% upon signing
+- Remaining 70% upon completion of services
+- All payments due within 30 days of invoice
+- Late payment fees: 1.5% per month on outstanding balance
+
+4. CONFIDENTIALITY
+Both parties agree to maintain strict confidentiality regarding:
+- Proprietary information shared during the engagement
+- Client data and personal information
+- Business strategies and plans
+- All communications and documents exchanged
+
+5. TERMINATION CLAUSE
+Either party may terminate this agreement with:
+- 30 days written notice
+- Outstanding payments must be settled immediately
+- Return of all materials within 7 days
+
+This is a sample bilingual legal document for testing the data ingestion system.
