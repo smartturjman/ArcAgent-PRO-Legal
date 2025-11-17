@@ -19,6 +19,7 @@ from datetime import datetime
 from typing import Optional, Dict, Any, List
 from pathlib import Path
 import json
+import hashlib
 
 try:
     from dotenv import load_dotenv
@@ -26,7 +27,8 @@ try:
 except ImportError:
     pass
 
-from fastapi import FastAPI, HTTPException, Query
+
+from fastapi import FastAPI, HTTPException, Query, UploadFile, File, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import uvicorn
@@ -85,15 +87,126 @@ class APIStatus(BaseModel):
     services: Dict[str, str]
 
 
+class EvidenceUploadResponse(BaseModel):
+    """Response payload for legal forensics uploads."""
+    status: str
+    filename: str
+    size_bytes: int
+    evidence_id: str
+    evidence_hash: str
+    stored_path: str
+    tokenized_at: str
+    message: Optional[str] = None
+
+
 # ============================================================================
 # FASTAPI APPLICATION
 # ============================================================================
 
 app = FastAPI(
     title="A-PROL REST API",
-    description="Autonomous legal compliance agent with auditable workflow",
-    version="1.0.0"
+    description="Autonomous legal compliance agent with auditable workflow + ALDP Legal Forensics",
+    version="1.1.0"
 )
+FORENSICS_ENDPOINT = "/forensics/evidence"
+MAX_EVIDENCE_BYTES = 200 * 1024 * 1024  # 200 MB upload limit
+# ============================================================================
+# NEW ENDPOINT: /audit/corporate - Corporate Audit
+# ============================================================================
+
+class CorporateAuditResponse(BaseModel):
+    status: str
+    audit_id: str
+    message: str
+
+@app.post("/audit/corporate", response_model=CorporateAuditResponse)
+async def audit_corporate(request: Request):
+    """
+    Corporate Audit: Accepts document summary and audit type, triggers ALDP compliance logic.
+    """
+    raw_body = (await request.body()).decode("utf-8").strip()
+    if not raw_body:
+        raise HTTPException(
+            status_code=400,
+            detail="Empty payload received. Please provide a JSON body for the audit."
+        )
+    try:
+        payload = json.loads(raw_body)
+    except json.JSONDecodeError as exc:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid JSON format provided in the audit payload."
+        ) from exc
+
+    if not isinstance(payload, dict):
+        raise HTTPException(
+            status_code=400,
+            detail="JSON payload must be an object with key/value pairs."
+        )
+
+    audit_type = payload.get("audit_type", "GENERAL")
+    document_summary = payload.get("document_summary") or payload.get("summary") or json.dumps(payload)
+
+    # Simulate audit logic and generate audit_id
+    import uuid
+    audit_id = f"CORPAUD-{uuid.uuid4().hex[:12]}"
+    # Here you would call ALDP compliance logic
+    # For demo, just log and return
+    print(f"[CORP AUDIT] {audit_type}: {document_summary}")
+    return CorporateAuditResponse(
+        status="completed",
+        audit_id=audit_id,
+        message=f"Corporate audit '{audit_type}' completed."
+    )
+
+# ============================================================================
+# NEW ENDPOINT: /forensics/evidence - Legal Forensics File Upload
+# ============================================================================
+
+@app.post(
+    FORENSICS_ENDPOINT,
+    response_model=EvidenceUploadResponse,
+    summary="Upload legal forensics evidence"
+)
+async def upload_evidence(file: UploadFile = File(...)):
+    """
+    Legal Forensics: Accept a file upload, persist it locally, and compute
+    a SHA256 hash that serves as the tokenized evidence identifier.
+    """
+    evidence_dir = Path(__file__).parent / "evidence_uploads"
+    evidence_dir.mkdir(exist_ok=True)
+
+    content = await file.read()
+    if not content:
+        raise HTTPException(status_code=400, detail="Uploaded file is empty.")
+
+    if len(content) > MAX_EVIDENCE_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=f"File exceeds {MAX_EVIDENCE_BYTES // (1024 * 1024)}MB limit."
+        )
+
+    timestamp = datetime.utcnow().strftime("%Y%m%d%H%M%S")
+    safe_name = f"{timestamp}_{file.filename}"
+    file_path = evidence_dir / safe_name
+    with open(file_path, "wb") as out_file:
+        out_file.write(content)
+
+    evidence_hash = hashlib.sha256(content).hexdigest()
+    evidence_id = f"TOKEN-{evidence_hash[:16].upper()}"
+
+    print(f"[FORENSICS] Uploaded {file.filename}, path={file_path}, hash={evidence_hash}")
+
+    return EvidenceUploadResponse(
+        status="success",
+        filename=file.filename,
+        size_bytes=len(content),
+        evidence_id=evidence_id,
+        evidence_hash=evidence_hash,
+        stored_path=str(file_path),
+        tokenized_at=datetime.utcnow().isoformat(),
+        message="Evidence stored and tokenized for custody tracking."
+    )
 
 # Enable CORS for frontend integration
 app.add_middleware(
@@ -346,6 +459,8 @@ async def root():
         "description": "Autonomous legal compliance agent with auditable workflow",
         "endpoints": {
             "POST /chat": "Submit compliance query",
+            "POST /audit/corporate": "Submit corporate audit payloads",
+            f"POST {FORENSICS_ENDPOINT}": "Upload legal forensics evidence",
             "GET /status": "Check API status",
             "GET /audit/{audit_id}": "Retrieve audit log",
             "GET /audit/list": "List recent audits",
