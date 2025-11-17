@@ -1,0 +1,1 @@
+{"audit_id": "AUDIT-20251117134201-4831", "timestamp": "2025-11-17T13:42:01.741405", "query": "H1B visa eligibility check", "visa_type": "H1B", "source_ids": [1, 2, 3], "compliance_score": 0.92, "compliance_decision": "COMPLIANT", "additional_context": {"agency": "USCIS", "processing_time": "15 business days"}, "recorded_by": "A-PROL Agent v1.0"}
