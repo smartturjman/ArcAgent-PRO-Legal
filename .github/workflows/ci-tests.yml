@@ -50,10 +50,16 @@ jobs:
           # Install core dependencies used by tests. Use binaries where available.
           pip install --prefer-binary qdrant-client llama-index fastapi uvicorn pydantic streamlit requests pytest -q
 
-      - name: Run integration tests
+      - name: Run integration tests (verbose)
         run: |
+          set -x
+          echo "Python & pip versions"
+          python --version || true
+          python -m pip --version || true
+          echo "Installed packages"
           python -m pip list
-          python -u test_integration.py
+          echo "Running integration tests (capturing output to integration_test.log)"
+          python -u test_integration.py 2>&1 | tee integration_test.log || (echo 'Tests failed; showing tail of log:' && tail -n 200 integration_test.log && exit 1)
 
       - name: Run E2E audit test
         run: |
@@ -77,6 +83,13 @@ jobs:
         with:
           name: audit-logs
           path: audit_logs/
+
+      - name: Upload integration test log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-test-log
+          path: integration_test.log
 
       - name: Stop Qdrant container
         if: always()
