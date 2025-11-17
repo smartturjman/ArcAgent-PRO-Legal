@@ -8,6 +8,7 @@ Run (from repo root):
   source ../venv/bin/activate
   python examples/connect_qdrant.py
 """
+import os
 import sys
 from qdrant_client import QdrantClient
 try:
@@ -17,11 +18,22 @@ except Exception:
     VectorParams = None
     Distance = None
 
+try:
+    # optional: load local .env during development
+    from dotenv import load_dotenv
+    load_dotenv()
+except Exception:
+    # python-dotenv not installed — rely on environment variables
+    pass
+
 
 def main():
-    url = "http://localhost:6333"
-    print(f"Connecting to Qdrant at {url}...")
-    client = QdrantClient(url=url)
+    # Read Qdrant connection info from environment (supports Qdrant Cloud)
+    url = os.getenv("QDRANT_URL", "http://localhost:6333")
+    api_key = os.getenv("QDRANT_API_KEY") or None
+    print(f"Connecting to Qdrant at {url} (api_key set={bool(api_key)})...")
+    # QdrantClient accepts `url` and `api_key` for cloud usage
+    client = QdrantClient(url=url, api_key=api_key)
 
     collection_name = "test_collection"
 

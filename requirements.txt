@@ -9,3 +9,4 @@ numpy
 pandas
 qdrant-client
 unstructured
+python-dotenv
